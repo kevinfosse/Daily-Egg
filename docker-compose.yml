@@ -1,0 +1,78 @@
+
+services:
+  # ---  Next.js ---
+  app:
+    image: node:20-alpine
+    container_name: pokeegg-app
+    working_dir: /app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DB_NAME}?authSource=admin
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - POKEAPI_BASE_URL=${POKEAPI_BASE_URL}
+      - WATCHPACK_POLLING=true
+    command: sh -c "npm install && npm run dev"
+    networks:
+      - pokeegg-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  # --- MongoDB ---
+  mongodb:
+    image: mongo:7
+    container_name: pokeegg-mongodb
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME}
+    volumes:
+      - mongodb_data:/data/db
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - pokeegg-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # admin MongoDB ---
+  mongo-express:
+    image: mongo-express:1
+    container_name: pokeegg-mongo-express
+    restart: unless-stopped
+    ports:
+      - "${ME_PORT:-8081}:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_ROOT_USERNAME}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_ROOT_PASSWORD}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: ${ME_BASICAUTH_USERNAME}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${ME_BASICAUTH_PASSWORD}
+    networks:
+      - pokeegg-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongodb_data:
+    driver: local
+  node_modules:
+    driver: local
+
+networks:
+  pokeegg-network:
+    driver: bridge
