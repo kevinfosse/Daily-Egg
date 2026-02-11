@@ -1,13 +1,12 @@
-import type { NextAuthConfig } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 import { connectToDb } from "../mongodb";
 import User from "../models/User";
 import { verifyPassword } from "./password";
 
-export const authOptions: NextAuthConfig = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
-    CredentialsProvider({
-      name: "Credentials",
+    Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
@@ -20,14 +19,13 @@ export const authOptions: NextAuthConfig = {
         await connectToDb();
 
         const user = await User.findOne({ email: credentials.email });
-        if (!user) {
-          return null;
-        }
+        if (!user) return null;
 
-        const isValid = await verifyPassword(credentials.password as string, user.passwordHash as string);
-        if (!isValid) {
-          return null;
-        }
+        const isValid = await verifyPassword(
+          credentials.password as string,
+          user.passwordHash
+        );
+        if (!isValid) return null;
 
         return {
           id: user._id.toString(),
@@ -38,10 +36,7 @@ export const authOptions: NextAuthConfig = {
     }),
   ],
 
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60,
-  },
+  session: { strategy: "jwt" },
 
   callbacks: {
     async jwt({ token, user }) {
@@ -51,19 +46,14 @@ export const authOptions: NextAuthConfig = {
       }
       return token;
     },
-
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        session.user.name = token.name as string;
+        session.user.username = token.username as string;
       }
       return session;
     },
   },
 
-  pages: {
-    signIn: "/login",
-  },
-
-  secret: process.env.NEXTAUTH_SECRET,
-};
+  pages: { signIn: "/login" },
+});
