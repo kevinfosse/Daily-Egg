@@ -5,16 +5,96 @@ import { auth } from "@/app/lib/auth/auth-options";
 import { eggSpinningWheel } from "@/app/lib/gacha/config";
 import { fetchPokemon } from "@/app/lib/pokeapi/pokeapi";
 
+const MAX_POKEDEX_ID = 1025; // National Dex (Gen 9). Ajuste si besoin.
+
+function classifyRarity(p: NonNullable<Awaited<ReturnType<typeof fetchPokemon>>>): string {
+  // Source de vérité: `pokemon-species` (legendary/mythical/baby) + BST (base stat total)
+  if (p.isLegendary || p.isMythical) return "legendary";
+  if (p.isBaby) return "common";
+
+  const bst = p.baseStatTotal || 0;
+
+  // Règle stable (simple, explicable) :
+  // - >= 540 : epic (pseudo-légendaires / très forts)
+  // - >= 480 : rare
+  // - >= 380 : uncommon
+  // - sinon : common
+  if (bst >= 540) return "epic";
+  if (bst >= 480) return "rare";
+  if (bst >= 380) return "uncommon";
+  return "common";
+}
+
+async function rollPokemonForEgg() {
+  // Gacha: tirage du tier (chance) puis sélection d'un Pokémon qui correspond
+  const pick = eggSpinningWheel();
+  const targetRarity = pick.selectedTier.rarity;
+  const isShiny = pick.isShiny;
+
+  let pokemonId: number | null = null;
+  let fetchedPokemon: Awaited<ReturnType<typeof fetchPokemon>> | null = null;
+  let rarity: string | null = null;
+
+  const maxAttempts = 80;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidateId = 1 + Math.floor(Math.random() * MAX_POKEDEX_ID);
+    const candidate = await fetchPokemon(candidateId);
+    if (!candidate) continue;
+
+    const candidateRarity = classifyRarity(candidate);
+    if (candidateRarity !== targetRarity) continue;
+
+    pokemonId = candidateId;
+    fetchedPokemon = candidate;
+    rarity = candidateRarity;
+    break;
+  }
+
+  if (!fetchedPokemon || pokemonId == null || !rarity) {
+    return { error: "Failed to roll a Pokémon for this rarity (try again)" as const };
+  }
+
+  const sprite = isShiny ? fetchedPokemon.spriteShiny : fetchedPokemon.spriteDefault;
+
+  return {
+    pokemonId,
+    fetchedPokemon,
+    rarity,
+    isShiny,
+    sprite,
+  };
+}
+
 export async function POST() {
   try {
-    const bypassDailyLimit =
-      process.env.BYPASS_HATCH_DAILY_LIMIT === "true";
     // 1. Retrieve the session
     const session = await auth();
-    if (!session || !session.user || !session.user.id) {
+    const isGuest = !session || !session.user || !session.user.id;
+
+    // Mode invité: pas de DB, pas de limite serveur, stockage côté client
+    if (isGuest) {
+      const rolled = await rollPokemonForEgg();
+      if ("error" in rolled) {
+        return NextResponse.json({ error: rolled.error }, { status: 500 });
+      }
+
+      const hatchedPokemon = {
+        pokedexId: rolled.pokemonId,
+        name: rolled.fetchedPokemon.name,
+        types: rolled.fetchedPokemon.types,
+        sprite: rolled.sprite,
+        isShiny: rolled.isShiny,
+        rarity: rolled.rarity,
+        count: 1,
+        hatchedAt: new Date(),
+      };
+
       return NextResponse.json(
-        { error: "Not authenticated" },
-        { status: 401 }
+        {
+          isGuest: true,
+          hatchedPokemon,
+        },
+        { status: 200 }
       );
     }
 
@@ -35,7 +115,7 @@ export async function POST() {
     const now = new Date();
     const lastHatchDate = user.lastHatchDate as Date | null;
 
-    if (!bypassDailyLimit && lastHatchDate) {
+    if (lastHatchDate) {
       const sameDay =
         lastHatchDate.getFullYear() === now.getFullYear() &&
         lastHatchDate.getMonth() === now.getMonth() &&
@@ -49,15 +129,17 @@ export async function POST() {
       }
     }
 
-    // 5. Gacha: determine which Pokémon is hatched
-    const { selectedTier, pokemonId, isShiny } = eggSpinningWheel();
-    const fetchedPokemon = await fetchPokemon(pokemonId);
-    if (!fetchedPokemon) {
-      return NextResponse.json(
-        { error: "Failed to fetch Pokémon data" },
-        { status: 500 }
-      );
+    // 5. Gacha: tirage du tier (chance) puis sélection d'un Pokémon qui correspond
+    const rolled = await rollPokemonForEgg();
+    if ("error" in rolled) {
+      return NextResponse.json({ error: rolled.error }, { status: 500 });
     }
+
+    const pokemonId = rolled.pokemonId;
+    const fetchedPokemon = rolled.fetchedPokemon;
+    const rarity = rolled.rarity;
+    const isShiny = rolled.isShiny;
+    const sprite = rolled.sprite;
 
     // 6. Update streak based on lastHatchDate (yesterday => +1, otherwise reset to 1)
     let streak = 1;
@@ -90,7 +172,7 @@ export async function POST() {
     // 8. Handle duplicate Pokémon or create a new entry
     const existingPokemon = user.pokemons.find(
       (p: any) =>
-        p.pokedexId === (pokemonId) && p.isShiny === isShiny
+        p.pokedexId === pokemonId && p.isShiny === isShiny
     );
 
     const hatchedAt = now;
@@ -105,9 +187,9 @@ export async function POST() {
         pokedexId: pokemonId,
         name: fetchedPokemon.name,
         types: fetchedPokemon.types,
-        sprite: fetchedPokemon.sprite,
+        sprite,
         isShiny,
-        rarity: selectedTier.rarity,
+        rarity,
         count: 1,
         hatchedAt,
       };

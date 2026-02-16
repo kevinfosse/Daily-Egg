@@ -24,3 +24,118 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+
+.pixel-box {
+  background: rgba(15, 23, 42, 0.225);
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(200, 220, 255, 0.3);
+  outline: 2px solid rgba(200, 220, 255, 0.08);
+  outline-offset: 3px;
+  border-radius: 4px;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Input moderne */
+.pixel-input {
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.355);
+  border: 1px solid rgba(100, 116, 139, 0.4);
+}
+
+.pixel-input:focus {
+  border-color: #f8d030;
+  box-shadow: 0 0 0 2px rgba(248, 208, 48, 0.15);
+  outline: none;
+}
+
+/* Bouton Pokéball */
+.pixel-button {
+  border-radius: 8px;
+  background: #EE1515;
+  border: none;
+  border-bottom: 3px solid #CC0000;
+  box-shadow: 0 4px 12px rgba(238, 21, 21, 0.3);
+  transition: all 0.15s;
+}
+
+.pixel-button:hover {
+  background: #CC0000;
+  box-shadow: 0 6px 16px rgba(238, 21, 21, 0.4);
+  transform: translateY(-1px);
+  border-bottom: 3px solid #8a0101;
+
+}
+
+.pixel-button:active {
+  transform: translateY(0px);
+  box-shadow: 0 2px 8px rgba(238, 21, 21, 0.3);
+}
+
+/* Stat box */
+.pixel-stat-box {
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+
+/* Animation œuf - tremblement (léger, style DS) */
+@keyframes egg-wobble {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  20% { transform: translateX(-4px) rotate(-7deg); }
+  40% { transform: translateX(4px) rotate(7deg); }
+  60% { transform: translateX(-3px) rotate(-5deg); }
+  80% { transform: translateX(3px) rotate(5deg); }
+}
+
+.egg-anim-wobble {
+  display: block;
+  transform-origin: 50% 85%;
+  animation: egg-wobble 0.6s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Animation œuf - tremblement intensif */
+@keyframes egg-shake {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  12% { transform: translate3d(-3px, 0, 0) rotate(-4deg); }
+  24% { transform: translate3d(3px, 0, 0) rotate(4deg); }
+  36% { transform: translate3d(-4px, 0, 0) rotate(-5deg); }
+  48% { transform: translate3d(4px, 0, 0) rotate(5deg); }
+  60% { transform: translate3d(-3px, 0, 0) rotate(-4deg); }
+  72% { transform: translate3d(3px, 0, 0) rotate(4deg); }
+  84% { transform: translate3d(-2px, 0, 0) rotate(-3deg); }
+}
+
+.egg-anim-shake {
+  display: block;
+  transform-origin: 50% 85%;
+  /* 0.35s = trop rapide visuellement → on ralentit et on garde un shake nerveux mais lisible */
+  animation: egg-shake 0.75s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite;
+  will-change: transform;
+}
+
+/* Flash blanc éclosion */
+@keyframes hatch-flash {
+  0% { opacity: 0; }
+  50% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Apparition Pokémon */
+@keyframes pokemon-reveal {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Sparkle autour du Pokémon */
+@keyframes sparkle-float {
+  0% { opacity: 0; transform: translateY(0) scale(0); }
+  50% { opacity: 1; transform: translateY(-20px) scale(1); }
+  100% { opacity: 0; transform: translateY(-40px) scale(0); }
+}
