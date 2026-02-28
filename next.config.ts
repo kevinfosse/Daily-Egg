@@ -9,7 +9,9 @@ const nextConfig = {
 
   images: {
     remotePatterns: [
-      { protocol: "https", hostname: "**" },
+      { protocol: "https", hostname: "raw.githubusercontent.com" },
+      { protocol: "https", hostname: "pokeapi.co" },
+      { protocol: "https", hostname: "pokedaily.unyxdev.cloud" },
     ],
   },
 };

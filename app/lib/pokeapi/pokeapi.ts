@@ -8,6 +8,14 @@ interface PokemonData {
   isBaby: boolean;
   evolvesFromSpeciesId: number | null;
   baseStatTotal: number;
+  stats: {
+    hp: number;
+    attack: number;
+    defense: number;
+    specialAttack: number;
+    specialDefense: number;
+    speed: number;
+  };
 }
   
   const cache = new Map<number, PokemonData>();
@@ -45,6 +53,13 @@ interface PokemonData {
         ? pokemon.stats.reduce((sum: number, s: any) => sum + (Number(s?.base_stat) || 0), 0)
         : 0;
 
+      const statMap: Record<string, number> = {};
+      if (Array.isArray(pokemon?.stats)) {
+        (pokemon.stats as any[]).forEach((s: any) => {
+          statMap[s.stat.name] = s.base_stat;
+        });
+      }
+
       const data: PokemonData = {
         name:
           species.names.find((n: any) => n.language.name === "fr")?.name ??
@@ -59,6 +74,14 @@ interface PokemonData {
           ? Number(String(species.evolves_from_species.url).split("/").filter(Boolean).pop() ?? NaN) || null
           : null,
         baseStatTotal,
+        stats: {
+          hp: statMap["hp"] ?? 45,
+          attack: statMap["attack"] ?? 45,
+          defense: statMap["defense"] ?? 45,
+          specialAttack: statMap["special-attack"] ?? 45,
+          specialDefense: statMap["special-defense"] ?? 45,
+          speed: statMap["speed"] ?? 45,
+        },
       };
   
       cache.set(id, data);

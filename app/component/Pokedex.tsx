@@ -4,13 +4,29 @@ import { useEffect, useMemo, useState } from "react";
 import type { HatchedPokemon } from "@/app/types";
 import { loadGuestState } from "@/app/lib/guest/storage";
 
+interface EvolveInfo {
+  canEvolve: boolean;
+  reason?: string;
+  nextEvolution?: {
+    id: number;
+    name: string;
+    sprite: string;
+    types: string[];
+    rarity: string;
+  };
+  candyCost?: number;
+  userCandy?: number;
+}
+
 interface PokedexProps {
   isOpen: boolean;
   onClose: () => void;
   isGuest?: boolean;
+  candy?: number;
+  onEvolve?: (newCandy: number, evolvedPokemon: HatchedPokemon) => void;
 }
 
-export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
+export default function Pokedex({ isOpen, onClose, isGuest, candy: candyProp, onEvolve }: PokedexProps) {
   const [pokemons, setPokemons] = useState<HatchedPokemon[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +34,10 @@ export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
   const [search, setSearch] = useState("");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [shinyOnly, setShinyOnly] = useState(false);
+  const [evolveInfo, setEvolveInfo] = useState<EvolveInfo | null>(null);
+  const [evolveLoading, setEvolveLoading] = useState(false);
+  const [evolving, setEvolving] = useState(false);
+  const [localCandy, setLocalCandy] = useState(candyProp ?? 0);
 
   const normalizedQuery = search.trim().toLowerCase();
   const filteredPokemons = useMemo(() => {
@@ -38,6 +58,26 @@ export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
       return (aId - bId) * dir;
     });
   }, [pokemons, normalizedQuery, sortOrder, shinyOnly]);
+
+  // Sync candy from parent
+  useEffect(() => {
+    setLocalCandy(candyProp ?? 0);
+  }, [candyProp]);
+
+  // Fetch evolve info when a pokemon is selected (authenticated users only)
+  useEffect(() => {
+    if (!selectedPokemon || isGuest) {
+      setEvolveInfo(null);
+      return;
+    }
+    setEvolveLoading(true);
+    setEvolveInfo(null);
+    fetch(`/api/evolve/info?pokedexId=${selectedPokemon.pokedexId}`)
+      .then((r) => r.json())
+      .then((data) => setEvolveInfo(data))
+      .catch(() => setEvolveInfo(null))
+      .finally(() => setEvolveLoading(false));
+  }, [selectedPokemon, isGuest]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -64,6 +104,44 @@ export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
       .catch(() => setError("Impossible de charger la collection"))
       .finally(() => setLoading(false));
   }, [isOpen, isGuest]);
+
+  const handleEvolve = async () => {
+    if (!selectedPokemon || evolving) return;
+    setEvolving(true);
+    try {
+      const res = await fetch("/api/evolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pokedexId: selectedPokemon.pokedexId, isShiny: selectedPokemon.isShiny }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error ?? "Erreur lors de l'évolution");
+        return;
+      }
+      // Update local candy
+      setLocalCandy(data.candy);
+      if (onEvolve) onEvolve(data.candy, data.evolved as HatchedPokemon);
+
+      // Refresh collection
+      fetch("/api/user/collection")
+        .then((r) => r.json())
+        .then((d) => {
+          const updated: HatchedPokemon[] = d.pokemons ?? d.hatchedPokemon ?? [];
+          setPokemons(updated);
+          // Select evolved pokemon if it exists in updated collection
+          const evolvedInList = updated.find(
+            (p) => p.pokedexId === data.evolved.pokedexId && p.isShiny === data.evolved.isShiny
+          );
+          setSelectedPokemon(evolvedInList ?? null);
+        })
+        .catch(() => {});
+    } catch {
+      alert("Erreur réseau");
+    } finally {
+      setEvolving(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -196,6 +274,11 @@ export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
                       </span>
                     ))}
                   </div>
+                  {(selectedPokemon as any).equippedItem && (
+                    <p className="font-[family-name:var(--font-pixel)] text-[8px] text-indigo-400 mt-1">
+                      {ITEM_EMOJIS[(selectedPokemon as any).equippedItem] ?? "📦"} {ITEM_NAMES[(selectedPokemon as any).equippedItem] ?? (selectedPokemon as any).equippedItem}
+                    </p>
+                  )}
                   {selectedPokemon.count > 1 && (
                     <p className="font-[family-name:var(--font-pixel)] text-[8px] text-slate-400 mt-2">
                       Obtenu x{selectedPokemon.count}
@@ -203,6 +286,56 @@ export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
                   )}
                 </div>
               </div>
+
+              {/* Évolution */}
+              {!isGuest && (
+                <div className="mt-3 pt-3" style={{ borderTop: "1px solid #2a3a4e" }}>
+                  {evolveLoading && (
+                    <p className="font-[family-name:var(--font-pixel)] text-[8px] text-slate-500 animate-pulse">
+                      Chargement évolution...
+                    </p>
+                  )}
+                  {!evolveLoading && evolveInfo && !evolveInfo.canEvolve && (
+                    <p className="font-[family-name:var(--font-pixel)] text-[8px] text-slate-500">
+                      Évolution finale
+                    </p>
+                  )}
+                  {!evolveLoading && evolveInfo?.canEvolve && evolveInfo.nextEvolution && (
+                    <div className="flex items-center gap-2">
+                      <span className="font-[family-name:var(--font-pixel)] text-[8px] text-slate-400">→</span>
+                      <img
+                        src={evolveInfo.nextEvolution.sprite}
+                        alt={evolveInfo.nextEvolution.name}
+                        className="w-8 h-8 object-contain"
+                        style={{ imageRendering: "pixelated" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-[family-name:var(--font-pixel)] text-[8px] text-white truncate">
+                          {evolveInfo.nextEvolution.name}
+                        </p>
+                        <p
+                          className="font-[family-name:var(--font-pixel)] text-[7px]"
+                          style={{ color: getRarityColor(evolveInfo.nextEvolution.rarity) }}
+                        >
+                          {evolveInfo.nextEvolution.rarity.toUpperCase()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleEvolve}
+                        disabled={evolving || localCandy < (evolveInfo.candyCost ?? 999)}
+                        className="font-[family-name:var(--font-pixel)] text-[8px] px-2 py-1 rounded disabled:opacity-40"
+                        style={{
+                          background: localCandy >= (evolveInfo.candyCost ?? 999) ? "#be185d" : "#374151",
+                          color: "white",
+                          border: "1px solid rgba(255,255,255,0.1)",
+                        }}
+                      >
+                        {evolving ? "..." : `Évoluer (${evolveInfo.candyCost}🍬)`}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -399,6 +532,24 @@ export default function Pokedex({ isOpen, onClose, isGuest }: PokedexProps) {
     </>
   );
 }
+
+const ITEM_NAMES: Record<string, string> = {
+  incense_rare: "Encens Rare",
+  incense_epic: "Encens Épique",
+  rare_candy: "Bonbon Rare",
+  amulet_coin: "Amulette Pièce",
+  macho_brace: "Bracelet Bras",
+  lum_berry: "Baie Lum",
+};
+
+const ITEM_EMOJIS: Record<string, string> = {
+  incense_rare: "🌿",
+  incense_epic: "🔮",
+  rare_candy: "🍭",
+  amulet_coin: "💰",
+  macho_brace: "💪",
+  lum_berry: "🍒",
+};
 
 function getRarityColor(rarity: string): string {
   const colors: Record<string, string> = {

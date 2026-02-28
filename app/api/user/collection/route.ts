@@ -17,20 +17,19 @@ export async function GET() {
     try {
         await connectToDb();
         
-        const user = await User.findById(session.user.id);
+        const user = await User.findById(session.user.id).lean() as any;
         if (!user) {
           return NextResponse.json(
             { error: "User not found" },
             { status: 404 }
           );
         }
-      
 
         return NextResponse.json({
-          totalHatchedPokemons: user.totalHatchedPokemons,
-          totalShinyHatchedPokemons: user.totalShinyHatchedPokemons,
-          collectionSize: user.pokemons.length,
-          pokemons: user.pokemons,
+          totalHatchedPokemons: user.totalHatchedPokemons ?? 0,
+          totalShinyHatchedPokemons: user.totalShinyHatchedPokemons ?? 0,
+          collectionSize: user.pokemons?.length ?? 0,
+          pokemons: user.pokemons ?? [],
         });
       
       } catch (error) {

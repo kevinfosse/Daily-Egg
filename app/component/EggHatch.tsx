@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // Sprite œuf officiel PokeAPI
 const EGG_SPRITE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/egg.png";
@@ -17,29 +17,39 @@ interface EggHatchProps {
     isShiny: boolean;
     rarity: string;
     types: string[];
+    isFeaturedMatch?: boolean;
   } | null;
   canHatch: boolean;
   loading: boolean;
+  pityCounter?: number;
 }
 
-export default function EggHatch({ onHatch, hatchResult, canHatch, loading }: EggHatchProps) {
+export default function EggHatch({ onHatch, hatchResult, canHatch, loading, pityCounter = 0 }: EggHatchProps) {
   const [phase, setPhase] = useState<HatchPhase>("idle");
   const [eggSrc, setEggSrc] = useState(EGG_SPRITE);
+  // true quand l'animation est déclenchée via le clic sur l'œuf (hatch quotidien)
+  const isAnimating = useRef(false);
 
-  // Reset la phase si on revient sans résultat
   useEffect(() => {
-    if (!hatchResult) setPhase("idle");
+    if (!hatchResult) {
+      setPhase("idle");
+      isAnimating.current = false;
+    } else if (!isAnimating.current) {
+      // Résultat externe (bonus / mystery) : pas d'animation, affiche directement
+      setPhase("reveal");
+    }
+    // Si isAnimating=true, l'animation gère elle-même la transition vers "reveal"
   }, [hatchResult]);
 
   const handleEggClick = () => {
     if (!canHatch || loading || phase !== "idle") return;
 
-    // Phase 1 : Wobble (léger tremblement)
+    isAnimating.current = true;
     setPhase("wobble");
 
-    // Lancer l'appel API en arrière-plan (ne pas bloquer le timing d'anim)
     onHatch().catch((err) => {
       console.error("Hatch error:", err);
+      isAnimating.current = false;
     });
 
     // Phase 2 : Shake (tremblement fort) après ~0.9s
@@ -49,7 +59,10 @@ export default function EggHatch({ onHatch, hatchResult, canHatch, loading }: Eg
     setTimeout(() => setPhase("flash"), 2200);
 
     // Phase 4 : Reveal après le flash (~3s après le tap)
-    setTimeout(() => setPhase("reveal"), 3000);
+    setTimeout(() => {
+      setPhase("reveal");
+      isAnimating.current = false;
+    }, 3000);
   };
 
   // Pas d'éclosion aujourd'hui
@@ -70,6 +83,12 @@ export default function EggHatch({ onHatch, hatchResult, canHatch, loading }: Eg
   if (hatchResult && phase === "reveal") {
     return (
       <div className="text-center pixel-box p-6 w-full">
+        {hatchResult.isFeaturedMatch && (
+          <p className="font-[family-name:var(--font-pixel)] text-[10px] mb-1 animate-pulse"
+             style={{ color: "#f472b6" }}>
+            ★ POKÉMON DU JOUR ★
+          </p>
+        )}
         {hatchResult.isShiny && (
           <p className="font-[family-name:var(--font-pixel)] text-yellow-400 text-xs mb-3 animate-pulse">
             SHINY !
@@ -170,6 +189,37 @@ export default function EggHatch({ onHatch, hatchResult, canHatch, loading }: Eg
         {phase === "wobble" && ""}
         {phase === "shake" && ""}
       </p>
+
+      {/* Pity progress bar — shown only in idle when counter > 0 */}
+      {phase === "idle" && pityCounter > 0 && (
+        <div className="mt-5 w-full">
+          <div className="flex justify-between items-center mb-1">
+            <span className="font-[family-name:var(--font-pixel)] text-[8px] text-slate-400">
+              ⚡ Pity
+            </span>
+            <span className="font-[family-name:var(--font-pixel)] text-[8px]"
+                  style={{ color: pityCounter >= 45 ? "#f59e0b" : "#94a3b8" }}>
+              {pityCounter}/50
+            </span>
+          </div>
+          <div className="w-full h-2 rounded-full" style={{ background: "rgba(255,255,255,0.1)" }}>
+            <div
+              className="h-2 rounded-full transition-all"
+              style={{
+                width: `${Math.min((pityCounter / 50) * 100, 100)}%`,
+                background: pityCounter >= 45
+                  ? "linear-gradient(90deg, #f59e0b, #ef4444)"
+                  : "linear-gradient(90deg, #6366f1, #8b5cf6)",
+              }}
+            />
+          </div>
+          {pityCounter >= 45 && (
+            <p className="font-[family-name:var(--font-pixel)] text-[8px] text-yellow-400 mt-1 text-center animate-pulse">
+              Épique garantie bientôt !
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

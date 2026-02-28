@@ -2,7 +2,8 @@ import { Rarity } from "@/app/types";
 import crypto from "crypto";
 
 export const SHINY_RATE = 1/128;
-interface Tier {
+
+export interface Tier {
   rarity: Rarity;
   chance: number;
 }
@@ -15,31 +16,49 @@ const LOOT_TABLE: Tier[] = [
   { rarity: "common", chance: 0.50 },
 ];
 
-function secureRandom(): number {
-  // Utilise un entier 32 bits pour obtenir un flottant dans [0, 1)
+const MYSTERY_LOOT_TABLE: Tier[] = [
+  { rarity: "legendary", chance: 0.10 },
+  { rarity: "epic", chance: 0.30 },
+  { rarity: "rare", chance: 0.60 },
+];
+
+// Mapping rarity -> plage de Pokedex IDs pour generatePokemonByRarity (spin)
+export const RARITY_CONFIG = {
+  COMMON: { pokemonRange: { min: 1, max: 150 } },
+  UNCOMMON: { pokemonRange: { min: 1, max: 400 } },
+  RARE: { pokemonRange: { min: 1, max: 700 } },
+  EPIC: { pokemonRange: { min: 1, max: 900 } },
+  LEGENDARY: { pokemonRange: { min: 1, max: 1025 } },
+} as const;
+
+export function secureRandom(): number {
   const buf = crypto.randomBytes(4);
-  const int = buf.readUInt32BE(0); // number
+  const int = buf.readUInt32BE(0);
   return int / 0xffffffff;
 }
 
-export function eggSpinningWheel(): {
-  selectedTier: Tier;
-  isShiny: boolean;
-} {
+function spinWheel(table: Tier[]): { selectedTier: Tier; isShiny: boolean } {
   const randomValue = secureRandom();
   let cumulativeWeight = 0;
 
-  for (const tier of LOOT_TABLE) {
+  for (const tier of table) {
     cumulativeWeight += tier.chance;
     if (randomValue < cumulativeWeight) {
       return { selectedTier: tier, isShiny: secureRandom() < SHINY_RATE };
     }
   }
 
-  // fallback
   return {
-    selectedTier: LOOT_TABLE[LOOT_TABLE.length - 1],
+    selectedTier: table[table.length - 1],
     isShiny: secureRandom() < SHINY_RATE,
   };
+}
+
+export function eggSpinningWheel() {
+  return spinWheel(LOOT_TABLE);
+}
+
+export function mysteryTicketWheel() {
+  return spinWheel(MYSTERY_LOOT_TABLE);
 }
 
