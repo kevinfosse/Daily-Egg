@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+/* import { NextRequest, NextResponse } from "next/server";
 import { connectToDb } from "@/app/lib/mongodb";
 import User from "@/app/lib/models/User";
 
@@ -128,3 +128,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+ */

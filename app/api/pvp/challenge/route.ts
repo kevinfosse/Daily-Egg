@@ -59,7 +59,7 @@ function simulatePvpBattle(
       // Defender attacks back
       const defMove = defMoves[Math.floor(secureRandom() * defMoves.length)];
       const defMult = getTypeMultiplier(defMove.type, attacker.types);
-      const defDmg = calcDamage(defender.def, attacker.def, defMove.power, defMult);
+      const defDmg = calcDamage(defender.atk, attacker.def, defMove.power, defMult);
       attackerHP = Math.max(0, attackerHP - defDmg);
       log.push(`${defender.name} → ${defDmg} dégâts sur ${attacker.name}`);
     }
